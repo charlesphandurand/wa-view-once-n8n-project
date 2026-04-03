@@ -54,73 +54,30 @@ services:
       timeout: 10s
       retries: 3
 
-  evolution-api:
-    image: docker.io/atendare/evolution-api:latest
-    container_name: evolution-api
+  whatsapp-api:
+    build:
+      context: ./whatsapp-api
+      dockerfile: Dockerfile
+    container_name: whatsapp-api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     environment:
-      # =========================
-      # BASIC SERVER CONFIGURATION
-      # =========================
-      SERVER_URL: http://localhost:8080
-      SERVER_PORT: "8080"
-      
-      # =========================
-      # DATABASE CONFIGURATION
-      # =========================
-      DATABASE_TYPE: postgres
-      DATABASE_CONNECTION_LIMIT: "10"
-      DATABASE_URL: postgres://n8n:n8n_password@postgres:5432/evolution
-      
-      # =========================
-      # AUTHENTICATION & SECURITY
-      # =========================
-      AUTH_TYPE: apikey
-      AUTH_API_KEY: your_super_secret_api_key_change_me_123456
-      WEBHOOK_GLOBAL_URL: http://n8n:5678/webhook
-      
-      # =========================
-      # WHATSAPP SETTINGS
-      # =========================
-      WHATSAPP_PROFILE_NAME: N8N WhatsApp Bot
-      WHATSAPP_BUSINESS_ACCOUNT: "false"
-      INSTANCE_PROCESSOR: "true"
-      INSTANCE_QRCODE_DISPLAY: "true"
-      
-      # =========================
-      # STORAGE & MEDIA
-      # =========================
-      STORE_MESSAGE_UP_TO_DATE: "false"
-      STORE_CONTACTS: "true"
-      STORE_CHATS: "true"
-      MEDIA_UPLOAD: "true"
-      MEDIA_PATH: /app/media
-      
-      # =========================
-      # LOGGING
-      # =========================
+      PORT: 3000
+      API_KEY: your_super_secret_api_key_change_me_123456
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/whatsapp-webhook
       LOG_LEVEL: info
-      LOG_FORMAT: json
-      
-      # =========================
-      # BROWSER & CHROME
-      # =========================
-      PUPPETEER_HEADLESS: "true"
-      PUPPETEER_NO_SANDBOX: "true"
-      PUPPETEER_DEFAULT_ARGS: --no-sandbox,--disable-gpu,--disable-dev-shm-usage
-      
-    depends_on:
-      postgres:
-        condition: service_healthy
+      NODE_OPTIONS: --dns-result-order=ipv4first
+    ports:
+      - "3000:3000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
-      - evolution_data:/app/data
-      - evolution_media:/app/media
+      - whatsapp_auth:/app/.auth
+      - whatsapp_data:/app/data
     networks:
       - n8n-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -128,8 +85,8 @@ services:
 volumes:
   postgres_data:
   n8n_data:
-  evolution_data:
-  evolution_media:
+  whatsapp_auth:
+  whatsapp_data:
 
 networks:
   n8n-network:

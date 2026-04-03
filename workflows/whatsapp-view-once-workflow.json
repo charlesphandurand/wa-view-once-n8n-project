@@ -1,0 +1,147 @@
+{
+  "name": "WhatsApp View Once Photo Capture",
+  "description": "Capture View Once photos from WhatsApp and save them locally",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "whatsapp-webhook",
+        "responseMode": "lastNode",
+        "responseData": "noData",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "{{ $json.data.type }}",
+              "condition": "equal",
+              "value2": "messages"
+            },
+            {
+              "value1": "{{ $json.data.message.mediaType }}",
+              "condition": "equal",
+              "value2": "imageMessage"
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-media",
+      "name": "Filter: Only Images",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://evolution-api:8080/message/base64/{{ $json.instanceName }}",
+        "authentication": "bearerToken",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer your_secure_api_key_change_me_12345"
+          }
+        }
+      },
+      "id": "extract-photo",
+      "name": "Extract Photo Base64",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "{{ $json.data.message.messageTimestamp }}.jpg",
+        "binaryData": "{{ $json.media }}"
+      },
+      "id": "save-file",
+      "name": "Save Photo File",
+      "type": "n8n-nodes-base.fileWrite",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://evolution-api:8080/message/send/{{ $json.instanceName }}",
+        "authentication": "bearerToken",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "{{ $json.data.message.from }}"
+            },
+            {
+              "name": "type",
+              "value": "text"
+            },
+            {
+              "name": "text",
+              "value": "Foto diterima! ✓"
+            }
+          ]
+        }
+      },
+      "id": "send-reply",
+      "name": "Send Reply Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "webhook-node": {
+      "main": [
+        [
+          {
+            "node": "filter-media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter-media": {
+      "main": [
+        [
+          {
+            "node": "extract-photo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-photo": {
+      "main": [
+        [
+          {
+            "node": "save-file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save-file": {
+      "main": [
+        [
+          {
+            "node": "send-reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

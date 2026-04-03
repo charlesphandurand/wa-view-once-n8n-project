@@ -1,0 +1,219 @@
+✅ N8N + WhatsApp Integration Setup Complete!
+
+================================================================================
+📊 CURRENT STATUS
+================================================================================
+
+✅ N8N Container          - Running (http://localhost:5678)
+✅ WhatsApp API Container - Running (http://localhost:3000)  
+✅ PostgreSQL Database     - Running (localhost:5432)
+
+All 3 containers are UP and healthy!
+
+================================================================================
+🎯 NEXT STEPS (In Order)
+================================================================================
+
+STEP 1: Generate WhatsApp QR Code
+────────────────────────────────────────────────────────────────
+Run this command:
+
+    curl http://localhost:3000/qr
+
+This returns a QR code string. Decode it using:
+- https://webqr.com (paste the QR string)
+- Or use your terminal if you have 'qrencode' installed
+
+
+STEP 2: Link WhatsApp on Your Phone
+────────────────────────────────────────────────────────────────
+1. Open WhatsApp on your SMARTPHONE (not web)
+2. Go to: Settings → Linked Devices
+3. Tap: "Link a Device"
+4. Scan the QR code from STEP 1
+5. Wait for "Device linked successfully" message
+
+⚠️ IMPORTANT:
+   - Must use smartphone WhatsApp (not web version)
+   - Device must stay on during setup
+   - QR code expires after ~3 minutes
+
+
+STEP 3: Verify WhatsApp Connection
+────────────────────────────────────────────────────────────────
+Run this command:
+
+    curl http://localhost:3000/status
+
+Expected response:
+    {"connected": true, "message": "WhatsApp connected"}
+
+If "connected": false, repeat STEP 1-2
+
+
+STEP 4: Open N8N and Import Workflow
+────────────────────────────────────────────────────────────────
+1. Open browser: http://localhost:5678
+2. Click: "Import" (or "+" to create new workflow)
+3. Upload file: workflows/whatsapp-view-once-workflow.json
+4. Click "Import"
+5. Click "Save" (Ctrl+S or Cmd+S)
+6. Click "Activate" (toggle switch in top-right)
+
+✅ Workflow is now ACTIVE and listening for messages!
+
+
+STEP 5: Test with View Once Photo
+────────────────────────────────────────────────────────────────
+1. From your PHONE, open WhatsApp
+2. Send a PHOTO as "View Once":
+   
+   iOS:     Photo → Edit → Send as View Once
+   Android: Photo → Select → View Once (before sending)
+
+3. The photo will be sent to your linked WhatsApp account
+4. Watch the N8N Executions panel for new entry
+5. Check logs: docker logs n8n-app | grep "webhook"
+
+If successful:
+   ✅ Webhook received the message
+   ✅ Photo extracted and saved
+   ✅ Reply sent back to WhatsApp
+
+================================================================================
+🔍 VERIFICATION COMMANDS
+================================================================================
+
+# Check all services are running
+docker compose -f n8n-project/docker-compose.yml ps
+
+# Check WhatsApp API logs
+docker logs whatsapp-api
+
+# Check N8N logs for webhook activity
+docker logs n8n-app | grep webhook
+
+# List saved photos
+docker exec n8n-app ls -la /home/node/.n8n/photos/
+
+# Check WhatsApp status
+curl http://localhost:3000/status
+
+# Get QR code again (if connection lost)
+curl http://localhost:3000/qr
+
+================================================================================
+📂 FILE STRUCTURE
+================================================================================
+
+n8n-project/
+├── docker-compose.yml                    # Container configuration
+├── README.md                             # Quick overview (👈 You are here)
+├── INTEGRATION_GUIDE.md                  # 📖 COMPLETE STEP-BY-STEP GUIDE
+├── WHATSAPP_SETUP.md                     # Manual setup reference
+├── whatsapp-api/
+│   ├── Dockerfile                        # WhatsApp API builder
+│   ├── package.json                      # Dependencies
+│   └── server.js                         # API server code
+└── workflows/
+    └── whatsapp-view-once-workflow.json  # N8N workflow template
+
+📖 MUST READ: INTEGRATION_GUIDE.md (comprehensive guide with all details)
+
+================================================================================
+🚨 TROUBLESHOOTING QUICK REFERENCE
+================================================================================
+
+❌ "WhatsApp not connecting"
+   → Scan QR code again: curl http://localhost:3000/qr
+   → Check phone settings: Settings → Linked Devices
+   → Restart WhatsApp API: docker restart whatsapp-api
+
+❌ "Webhook not receiving messages"
+   → Verify workflow is ACTIVATED (green toggle in N8N)
+   → Check workflow path: /webhook/whatsapp-webhook
+   → Restart N8N: docker restart n8n-app
+
+❌ "Photos not saving"
+   → Create folder: docker exec n8n-app mkdir -p /home/node/.n8n/photos/
+   → Fix permissions: docker exec n8n-app chmod 777 /home/node/.n8n/photos/
+   → Check N8N logs: docker logs n8n-app
+
+❌ "Can't access http://localhost:5678"
+   → Wait 60+ seconds for N8N startup
+   → Check if N8N container is running: docker ps | grep n8n-app
+   → Restart: docker restart n8n-app
+
+📖 For complete troubleshooting guide: See INTEGRATION_GUIDE.md
+
+================================================================================
+🎓 WHAT HAPPENS WHEN YOU SEND A PHOTO
+================================================================================
+
+1. You send View Once photo on WhatsApp
+                ↓
+2. WhatsApp API (Baileys) receives it via linked device
+                ↓
+3. API sends HTTP webhook to N8N with photo data
+                ↓
+4. N8N webhook triggers workflow execution
+                ↓
+5. Workflow filters: Is it an image? → YES
+                ↓
+6. Extract photo data from WhatsApp format
+                ↓
+7. Save to disk: /home/node/.n8n/photos/[timestamp].jpg
+                ↓
+8. Send reply: "Foto diterima! ✓"
+                ↓
+9. Reply appears in WhatsApp chat
+
+================================================================================
+📚 USEFUL RESOURCES
+================================================================================
+
+N8N Docs:        https://docs.n8n.io/
+Baileys Lib:     https://github.com/WhiskeySockets/Baileys
+Docker Docs:     https://docs.docker.com/
+
+WhatsApp Linked Device Info:
+https://www.whatsapp.com/features/linked-devices/
+
+================================================================================
+✅ READY TO START?
+================================================================================
+
+1. Run: curl http://localhost:3000/qr
+2. Scan with WhatsApp on your phone
+3. Verify: curl http://localhost:3000/status
+4. Open: http://localhost:5678
+5. Import workflow
+6. Send View Once photo
+7. Done! 🎉
+
+For details: See INTEGRATION_GUIDE.md
+
+================================================================================
+💬 QUICK REFERENCE
+================================================================================
+
+Access N8N UI:           http://localhost:5678
+Access WhatsApp API:     http://localhost:3000
+Database (internal):     localhost:5432
+
+Get WhatsApp QR:         curl http://localhost:3000/qr
+Check WhatsApp Status:   curl http://localhost:3000/status
+View WhatsApp Logs:      docker logs whatsapp-api
+View N8N Logs:           docker logs n8n-app
+List Photos:             docker exec n8n-app ls /home/node/.n8n/photos/
+
+Stop all services:       docker compose down (in n8n-project folder)
+Start services:          docker compose up -d (in n8n-project folder)
+
+================================================================================
+
+Selamat mencoba! 🚀
+
+For complete guide with all details: READ INTEGRATION_GUIDE.md
+
+================================================================================

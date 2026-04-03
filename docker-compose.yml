@@ -1,0 +1,136 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: n8n-postgres
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: n8n_password
+      POSTGRES_DB: n8n
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - n8n-network
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: n8n_password
+      N8N_PROTOCOL: http
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_WEBHOOK_TUNNEL_URL: http://localhost:5678/
+      N8N_METRICS: "true"
+      N8N_LOG_LEVEL: info
+      EXECUTIONS_DATA_PRUNE_TIMEOUT: 3600
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/n8n/workflows
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  evolution-api:
+    image: docker.io/atendare/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # =========================
+      # BASIC SERVER CONFIGURATION
+      # =========================
+      SERVER_URL: http://localhost:8080
+      SERVER_PORT: "8080"
+      
+      # =========================
+      # DATABASE CONFIGURATION
+      # =========================
+      DATABASE_TYPE: postgres
+      DATABASE_CONNECTION_LIMIT: "10"
+      DATABASE_URL: postgres://n8n:n8n_password@postgres:5432/evolution
+      
+      # =========================
+      # AUTHENTICATION & SECURITY
+      # =========================
+      AUTH_TYPE: apikey
+      AUTH_API_KEY: your_super_secret_api_key_change_me_123456
+      WEBHOOK_GLOBAL_URL: http://n8n:5678/webhook
+      
+      # =========================
+      # WHATSAPP SETTINGS
+      # =========================
+      WHATSAPP_PROFILE_NAME: N8N WhatsApp Bot
+      WHATSAPP_BUSINESS_ACCOUNT: "false"
+      INSTANCE_PROCESSOR: "true"
+      INSTANCE_QRCODE_DISPLAY: "true"
+      
+      # =========================
+      # STORAGE & MEDIA
+      # =========================
+      STORE_MESSAGE_UP_TO_DATE: "false"
+      STORE_CONTACTS: "true"
+      STORE_CHATS: "true"
+      MEDIA_UPLOAD: "true"
+      MEDIA_PATH: /app/media
+      
+      # =========================
+      # LOGGING
+      # =========================
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      
+      # =========================
+      # BROWSER & CHROME
+      # =========================
+      PUPPETEER_HEADLESS: "true"
+      PUPPETEER_NO_SANDBOX: "true"
+      PUPPETEER_DEFAULT_ARGS: --no-sandbox,--disable-gpu,--disable-dev-shm-usage
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - evolution_data:/app/data
+      - evolution_media:/app/media
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  n8n_data:
+  evolution_data:
+  evolution_media:
+
+networks:
+  n8n-network:
+    driver: bridge

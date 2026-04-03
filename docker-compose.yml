@@ -37,6 +37,7 @@ services:
       N8N_PROTOCOL: http
       N8N_HOST: 0.0.0.0
       N8N_PORT: 5678
+      N8N_EDITOR_BASE_URL: http://localhost:5678/
       N8N_WEBHOOK_TUNNEL_URL: http://localhost:5678/
       N8N_METRICS: "true"
       N8N_LOG_LEVEL: info
@@ -46,6 +47,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/n8n/workflows
+      - ./photos:/home/node/n8n/photos
     networks:
       - n8n-network
     healthcheck:
@@ -68,9 +70,6 @@ services:
       NODE_OPTIONS: --dns-result-order=ipv4first
     ports:
       - "3000:3000"
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
     volumes:
       - whatsapp_auth:/app/.auth
       - whatsapp_data:/app/data

@@ -1,5 +1,5 @@
 const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
 const cors = require('cors');
@@ -22,6 +22,40 @@ let isConnected = false;
 let lastDisconnectInfo = null;
 let lastQrAt = null;
 
+
+function getViewOnceImageMessage(msg) {
+  const m = msg?.message;
+  if (!m) return null;
+  return (
+    m.viewOnceMessage?.message?.imageMessage ||
+    m.viewOnceMessageV2?.message?.imageMessage ||
+    m.viewOnceMessageV2Extension?.message?.imageMessage ||
+    null
+  );
+}
+
+async function downloadImageBuffer(message, imageMessage) {
+  // Try direct helper first (works for most Baileys versions)
+  try {
+    const buffer = await downloadMediaMessage(
+      message,
+      'buffer',
+      {},
+      { logger }
+    );
+    if (buffer) return buffer;
+  } catch (error) {
+    // fallback below
+  }
+
+  // Fallback: stream download
+  const stream = await downloadContentFromMessage(imageMessage, 'image');
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks);
+}
 const dataDir = '/app/data';
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -86,8 +120,62 @@ async function startWhatsApp() {
 
     sock.ev.on('messages.upsert', async (m) => {
       try {
+        try {
+          console.log('messages.upsert event', { type: m?.type, count: m?.messages?.length || 0 });
+        } catch (e) {}
         for (const message of m.messages) {
           if (!message.message) continue;
+          if (message.key?.fromMe) continue;
+
+          try {
+            const keys = Object.keys(message.message || {});
+            console.log('Incoming message', {
+              from: message.key?.remoteJid,
+              types: keys,
+              hasViewOnce: Boolean(getViewOnceImageMessage(message))
+            });
+          } catch (e) {}
+
+          // Auto-handle view-once images: download and resend to the same chat
+          try {
+            const voImage = getViewOnceImageMessage(message);
+            if (voImage && sock) {
+              const imgBuffer = await downloadImageBuffer(message, voImage);
+              if (imgBuffer) {
+                // Send back to the same chat
+                await sock.sendMessage(
+                  message.key.remoteJid,
+                  { image: imgBuffer, caption: 'View-once image recovered' }
+                );
+
+                // Send to N8N webhook with base64 payload for saving
+                const voPayload = {
+                  from: message.key.remoteJid,
+                  timestamp: message.messageTimestamp,
+                  type: 'view_once',
+                  message: {
+                    from: message.key.remoteJid,
+                    messageTimestamp: message.messageTimestamp,
+                    mediaType: 'imageMessage',
+                    isViewOnce: true,
+                    mimetype: voImage.mimetype || 'image/jpeg',
+                    fileLength: voImage.fileLength || null,
+                    caption: voImage.caption || null,
+                    base64: imgBuffer.toString('base64')
+                  }
+                };
+
+                try {
+                  await axios.post(N8N_WEBHOOK_URL, voPayload);
+                  console.log('?? View-once image sent to N8N');
+                } catch (error) {
+                  console.error('? Webhook error (view-once):', error.message);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('View-once handling error:', error.message);
+          }
 
           const messageData = {
             from: message.key.remoteJid,

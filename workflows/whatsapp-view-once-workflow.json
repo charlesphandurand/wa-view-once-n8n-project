@@ -1,11 +1,10 @@
 {
-  "name": "WhatsApp View Once Photo Capture",
-  "description": "Capture View Once photos from WhatsApp and save them locally",
+  "name": "WhatsApp View-Once Save",
   "nodes": [
     {
       "parameters": {
         "path": "whatsapp-webhook",
-        "responseMode": "lastNode",
+        "responseMode": "onReceived",
         "responseData": "noData",
         "options": {}
       },
@@ -13,135 +12,102 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
             {
-              "value1": "{{ $json.data.type }}",
+              "value1": "={{ $json.type }}",
               "condition": "equal",
-              "value2": "messages"
+              "value2": "view_once"
             },
             {
-              "value1": "{{ $json.data.message.mediaType }}",
+              "value1": "={{ $json.message.isViewOnce }}",
               "condition": "equal",
-              "value2": "imageMessage"
+              "value2": true
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         }
       },
-      "id": "filter-media",
-      "name": "Filter: Only Images",
+      "id": "if-view-once",
+      "name": "IF View Once",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [500, 300]
+      "position": [
+        520,
+        300
+      ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "http://evolution-api:8080/message/base64/{{ $json.instanceName }}",
-        "authentication": "bearerToken",
-        "nodeCredentialType": "httpHeaderAuth",
-        "options": {
-          "headers": {
-            "Authorization": "Bearer your_secure_api_key_change_me_12345"
-          }
-        }
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Convert base64 -> binary for Write Binary File\nconst base64 = $json.message.base64;\nif (!base64) {\n  return item;\n}\nconst mime = $json.message.mimetype || 'image/jpeg';\nconst ext = (mime.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';\nconst ts = $json.timestamp || Date.now();\nconst fileName = `${ts}.${ext}`;\n\nitem.binary = {\n  data: {\n    data: Buffer.from(base64, 'base64'),\n    mimeType: mime,\n    fileName\n  }\n};\n\nreturn item;"
       },
-      "id": "extract-photo",
-      "name": "Extract Photo Base64",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [750, 300]
+      "id": "code-to-binary",
+      "name": "To Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
     },
     {
       "parameters": {
-        "fileName": "{{ $json.data.message.messageTimestamp }}.jpg",
-        "binaryData": "{{ $json.media }}"
+        "filePath": "/home/node/n8n/photos/{{ $binary.data.fileName }}",
+        "dataPropertyName": "data"
       },
-      "id": "save-file",
-      "name": "Save Photo File",
-      "type": "n8n-nodes-base.fileWrite",
+      "id": "write-file",
+      "name": "Write File",
+      "type": "n8n-nodes-base.writeBinaryFile",
       "typeVersion": 1,
-      "position": [1000, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://evolution-api:8080/message/send/{{ $json.instanceName }}",
-        "authentication": "bearerToken",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "number",
-              "value": "{{ $json.data.message.from }}"
-            },
-            {
-              "name": "type",
-              "value": "text"
-            },
-            {
-              "name": "text",
-              "value": "Foto diterima! ✓"
-            }
-          ]
-        }
-      },
-      "id": "send-reply",
-      "name": "Send Reply Message",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [1250, 300]
+      "position": [
+        1040,
+        300
+      ]
     }
   ],
   "connections": {
-    "webhook-node": {
+    "Webhook": {
       "main": [
         [
           {
-            "node": "filter-media",
+            "node": "IF View Once",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "filter-media": {
+    "IF View Once": {
       "main": [
         [
           {
-            "node": "extract-photo",
+            "node": "To Binary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "extract-photo": {
+    "To Binary": {
       "main": [
         [
           {
-            "node": "save-file",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "save-file": {
-      "main": [
-        [
-          {
-            "node": "send-reply",
+            "node": "Write File",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "active": false,
+  "settings": {}
 }
